@@ -156,9 +156,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="sqlite3.c" />
+    <ClCompile Include="sqlite_helper.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="core.h" />
+    <ClInclude Include="uncopyable.h" />
     <ClInclude Include="sqlite3.h" />
+    <ClInclude Include="sqlite_helper.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
