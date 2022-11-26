@@ -1,10 +1,14 @@
 #include "sqlite_helper.h"
-#include "sqlite3.h"
+
+#include <winsqlite/winsqlite3.h>
 
 
-BEGIN_NAMESPACE(Sqlite)
+#pragma comment(lib, "winsqlite3.lib")
 
-BEGIN_NAMESPACE(Anonymous)
+
+namespace SqliteHelper {
+
+namespace {
 
 
 constexpr size_t max_blob_length = 4096;  // 4kb
@@ -26,7 +30,7 @@ inline sqlite3_stmt* AsSqliteStmt(void* stmt) { return static_cast<sqlite3_stmt*
 inline sqlite3_stmt** AsSqliteStmt(void** stmt) { return reinterpret_cast<sqlite3_stmt**>(stmt); }
 
 
-END_NAMESPACE(Anonymous)
+}
 
 
 Query::~Query() {
@@ -58,34 +62,35 @@ bool Database::ExecuteQuery(Query& query) {
 	throw std::runtime_error("sqlite error");
 }
 
-void Database::Bind(Query& query, uint64 value) {
-	res << sqlite3_bind_int64(AsSqliteStmt(query.command), index++, value);
+void Database::Bind(Query& query, uint64 object) {
+	res << sqlite3_bind_int64(AsSqliteStmt(query.command), index++, object);
 }
 
-void Database::Bind(Query& query, const std::string& value) {
-	if (value.size() > max_blob_length) { throw std::invalid_argument("string too long"); }
-	res << sqlite3_bind_text(AsSqliteStmt(query.command), index++, value.data(), (int)value.size(), SQLITE_TRANSIENT);
+void Database::Bind(Query& query, const std::string& object) {
+	if (object.size() > max_blob_length) { throw std::runtime_error("string too long"); }
+	res << sqlite3_bind_text(AsSqliteStmt(query.command), index++, object.data(), (int)object.size(), SQLITE_STATIC);
 }
 
-void Database::Bind(Query& query, std::pair<const byte*, size_t> value) {
-	if (value.second > max_blob_length) { throw std::invalid_argument("blob size too large"); }
-	res << sqlite3_bind_blob(AsSqliteStmt(query.command), index++, value.first, (int)value.second, SQLITE_TRANSIENT);
+void Database::Bind(Query& query, const std::vector<byte>& object) {
+	if (object.size() > max_blob_length) { throw std::runtime_error("blob too large"); }
+	res << sqlite3_bind_blob(AsSqliteStmt(query.command), index++, object.data(), (int)object.size(), SQLITE_STATIC);
 }
 
-void Database::Read(Query& query, uint64& value) {
-	value = sqlite3_column_int64(AsSqliteStmt(query.command), index++);
+void Database::Read(Query& query, uint64& object) {
+	object = sqlite3_column_int64(AsSqliteStmt(query.command), index++);
 }
 
-void Database::Read(Query& query, std::string& value) {
+void Database::Read(Query& query, std::string& object) {
 	const char* data = (const char*)sqlite3_column_text(AsSqliteStmt(query.command), index);
 	size_t size = sqlite3_column_bytes(AsSqliteStmt(query.command), index++);
-	value.assign(data, data + size);
+	object.assign(data, data + size);
 }
 
-void Database::Read(Query& query, std::pair<const byte*, size_t>& value) {
-	value.first = static_cast<const byte*>(sqlite3_column_blob(AsSqliteStmt(query.command), index));
-	value.second = sqlite3_column_bytes(AsSqliteStmt(query.command), index++);
+void Database::Read(Query& query, std::vector<byte>& object) {
+	const byte* data = (const byte*)sqlite3_column_blob(AsSqliteStmt(query.command), index);
+	size_t size = sqlite3_column_bytes(AsSqliteStmt(query.command), index++);
+	object.assign(data, data + size);
 }
 
 
-END_NAMESPACE(Sqlite)
+}

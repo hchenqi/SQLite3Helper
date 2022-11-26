@@ -1,71 +1,59 @@
 #pragma once
 
-#include "uncopyable.h"
-
 #include <string>
 #include <vector>
-#include <span>
+#include <tuple>
+#include <functional>
+#include <stdexcept>
 
 
-BEGIN_NAMESPACE(Sqlite)
+namespace SqliteHelper {
+
+using byte = std::byte;
+using uint64 = unsigned long long;
 
 
-class Query : std::string, Uncopyable {
+class Query : std::string {
 public:
 	using std::string::string;
 	~Query();
 private:
+	Query(const Query&) = delete;
+	Query& operator=(const Query&) = delete;
+private:
 	friend class Database;
-	alloc_ptr<void> command = nullptr;
+	void* command = nullptr;
 };
 
 
-class Database : Uncopyable {
+class Database {
 public:
 	Database(const char file[]);
 	~Database();
 private:
-	alloc_ptr<void> db;
+	Database(const Database&) = delete;
+	Database& operator=(const Database&) = delete;
+private:
+	void* db;
 private:
 	void PrepareQuery(Query& query);
 	bool ExecuteQuery(Query& query);
 private:
-	void Bind(Query& query, uint64 value);
-	void Bind(Query& query, const std::string& value);
-	void Bind(Query& query, std::pair<const byte*, size_t> value);
-	template<class T>
-	void Bind(Query& query, std::span<const T> value) {
-		Bind(query, { reinterpret_cast<const byte*>(value.data()), value.size_bytes() });
-	}
-	template<class T>
-	void Bind(Query& query, const std::vector<T>& value) {
-		Bind(query, std::span<const T>(value));
-	}
+	void Bind(Query& query, uint64 object);
+	void Bind(Query& query, const std::string& object);
+	void Bind(Query& query, const std::vector<byte>& object);
 private:
-	void Read(Query& query, uint64& value);
-	void Read(Query& query, std::string& value);
-	void Read(Query& query, std::pair<const byte*, size_t>& value);
-	void Read(Query& query, bool& value) { uint64 temp; Read(query, temp); value = static_cast<bool>(temp); }
-	template<class T>
-	void Read(Query& query, std::span<const T>& value) {
-		std::pair<const byte*, size_t> value_pair;
-		Read(query, value_pair);
-		if (value_pair.second % sizeof(T) != 0) { throw std::runtime_error("blob length error"); }
-		value = std::span<const T>(reinterpret_cast<const T*>(value_pair.first), value_pair.second / sizeof(T));
-	}
-	template<class T>
-	void Read(Query& query, std::vector<T>& value) {
-		std::span<const T> value_span;
-		Read(query, value_span);
-		value.assign(value_span.begin(), value_span.end());
-	}
-	template<class T1, class T2>
-	void Read(Query& query, std::pair<T1, T2>& value) {
-		Read(query, value.first); Read(query, value.second);
+	void Read(Query& query, uint64& object);
+	void Read(Query& query, std::string& object);
+	void Read(Query& query, std::vector<byte>& object);
+private:
+	template<class... Ts>
+	void Bind(Query& query, const std::tuple<Ts...>& object) {
+		std::apply([&](auto&... member) { (Bind(query, member), ...); }, object);
 	}
 	template<class... Ts>
-	void Read(Query& query, std::tuple<Ts...>& value) {
-		std::apply([&](auto&... member) { (Read(query, member), ...); }, value);
+	void Read(Query& query, std::tuple<Ts...>& object) {
+		std::apply([&](auto&... member) { (Read(query, member), ...); }, object);
 	}
 public:
 	template<class... Ts>
@@ -94,4 +82,4 @@ public:
 };
 
 
-END_NAMESPACE(Sqlite)
+}

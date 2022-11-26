@@ -155,12 +155,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="example.cpp" />
     <ClCompile Include="sqlite3.c" />
     <ClCompile Include="sqlite_helper.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="core.h" />
-    <ClInclude Include="uncopyable.h" />
     <ClInclude Include="sqlite3.h" />
     <ClInclude Include="sqlite_helper.h" />
   </ItemGroup>
