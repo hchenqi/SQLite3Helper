@@ -10,7 +10,6 @@ namespace SqliteHelper {
 
 namespace {
 
-
 constexpr size_t max_blob_length = 4096;  // 4kb
 
 int index = 0;
@@ -22,13 +21,11 @@ constexpr struct Result {
 	}
 }res;
 
-
 inline sqlite3* AsSqliteDb(void* db) { return static_cast<sqlite3*>(db); }
 inline sqlite3** AsSqliteDb(void** db) { return reinterpret_cast<sqlite3**>(db); }
 
 inline sqlite3_stmt* AsSqliteStmt(void* stmt) { return static_cast<sqlite3_stmt*>(stmt); }
 inline sqlite3_stmt** AsSqliteStmt(void** stmt) { return reinterpret_cast<sqlite3_stmt**>(stmt); }
-
 
 }
 
@@ -66,30 +63,18 @@ void Database::Bind(Query& query, uint64 object) {
 	res << sqlite3_bind_int64(AsSqliteStmt(query.command), index++, object);
 }
 
-void Database::Bind(Query& query, const std::string& object) {
-	if (object.size() > max_blob_length) { throw std::runtime_error("string too long"); }
-	res << sqlite3_bind_text(AsSqliteStmt(query.command), index++, object.data(), (int)object.size(), SQLITE_STATIC);
-}
-
-void Database::Bind(Query& query, const std::vector<byte>& object) {
-	if (object.size() > max_blob_length) { throw std::runtime_error("blob too large"); }
-	res << sqlite3_bind_blob(AsSqliteStmt(query.command), index++, object.data(), (int)object.size(), SQLITE_STATIC);
+void Database::Bind(Query& query, const void* data, size_t length) {
+	if (length > max_blob_length) { throw std::runtime_error("blob too large"); }
+	res << sqlite3_bind_blob(AsSqliteStmt(query.command), index++, data, (int)length, SQLITE_STATIC);
 }
 
 void Database::Read(Query& query, uint64& object) {
 	object = sqlite3_column_int64(AsSqliteStmt(query.command), index++);
 }
 
-void Database::Read(Query& query, std::string& object) {
-	const char* data = (const char*)sqlite3_column_text(AsSqliteStmt(query.command), index);
-	size_t size = sqlite3_column_bytes(AsSqliteStmt(query.command), index++);
-	object.assign(data, data + size);
-}
-
-void Database::Read(Query& query, std::vector<byte>& object) {
-	const byte* data = (const byte*)sqlite3_column_blob(AsSqliteStmt(query.command), index);
-	size_t size = sqlite3_column_bytes(AsSqliteStmt(query.command), index++);
-	object.assign(data, data + size);
+void Database::Read(Query& query, const void*& data, size_t& length) {
+	data = sqlite3_column_blob(AsSqliteStmt(query.command), index);
+	length = sqlite3_column_bytes(AsSqliteStmt(query.command), index++);
 }
 
 

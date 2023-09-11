@@ -35,26 +35,59 @@ private:
 	Database& operator=(const Database&) = delete;
 private:
 	void* db;
+
 private:
 	void PrepareQuery(Query& query);
 	bool ExecuteQuery(Query& query);
+
 private:
 	void Bind(Query& query, uint64 object);
-	void Bind(Query& query, const std::string& object);
-	void Bind(Query& query, const std::vector<byte>& object);
+	void Bind(Query& query, const void* data, size_t length);
 private:
-	void Read(Query& query, uint64& object);
-	void Read(Query& query, std::string& object);
-	void Read(Query& query, std::vector<byte>& object);
-private:
+	template<class T> requires std::is_trivial_v<T>
+	void Bind(Query& query, const std::basic_string<T>& object) {
+		Bind(query, object.data(), object.size() * sizeof(T));
+	}
+	template<class T> requires std::is_trivial_v<T>
+	void Bind(Query& query, const std::vector<T>& object) {
+		Bind(query, object.data(), object.size() * sizeof(T));
+	}
+	template<class T1, class T2>
+	void Bind(Query& query, const std::pair<T1, T2>& object) {
+		Bind(query, object.first); Bind(query, object.second);
+	}
 	template<class... Ts>
 	void Bind(Query& query, const std::tuple<Ts...>& object) {
 		std::apply([&](auto&... member) { (Bind(query, member), ...); }, object);
+	}
+
+private:
+	void Read(Query& query, uint64& object);
+	void Read(Query& query, const void*& data, size_t& length);
+private:
+	template<class T> requires std::is_trivial_v<T>
+	void Read(Query& query, std::basic_string<T>& object) {
+		const void* data; size_t length; Read(query, data, length);
+		if (length % sizeof(T)) { throw std::runtime_error("length error"); }
+		const T* begin = static_cast<const T*>(data); length /= sizeof(T);
+		object.assign(begin, length);
+	}
+	template<class T> requires std::is_trivial_v<T>
+	void Read(Query& query, std::vector<T>& object) {
+		const void* data; size_t length; Read(query, data, length);
+		if (length % sizeof(T)) { throw std::runtime_error("length error"); }
+		const T* begin = static_cast<const T*>(data); length /= sizeof(T);
+		object.assign(begin, begin + length);
+	}
+	template<class T1, class T2>
+	void Read(Query& query, std::pair<T1, T2>& object) {
+		Read(query, object.first); Read(query, object.second);
 	}
 	template<class... Ts>
 	void Read(Query& query, std::tuple<Ts...>& object) {
 		std::apply([&](auto&... member) { (Read(query, member), ...); }, object);
 	}
+
 public:
 	template<class... Ts>
 	void Execute(Query& query, const Ts&... para) {
