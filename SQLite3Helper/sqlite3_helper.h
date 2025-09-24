@@ -27,18 +27,27 @@ private:
 
 
 class Database {
+private:
+	void* db;
+
 public:
 	Database(const char file[]);
 	~Database();
 private:
 	Database(const Database&) = delete;
 	Database& operator=(const Database&) = delete;
+
 private:
-	void* db;
+	Query begin_transaction = "BEGIN TRANSACTION";
+	Query commit = "COMMIT";
+	Query rollback = "ROLLBACK";
+	size_t transaction_level = 0;
 
 private:
 	void PrepareQuery(Query& query);
 	bool ExecuteQuery(Query& query);
+public:
+	uint64 Changes();
 
 private:
 	void Bind(Query& query, uint64 object);
@@ -93,15 +102,16 @@ public:
 	void Execute(Query& query, const Ts&... para) {
 		PrepareQuery(query);
 		(Bind(query, para), ...);
-		ExecuteQuery(query);
+		while (ExecuteQuery(query));
 	}
 	template<class T, class... Ts>
 	T ExecuteForOne(Query& query, const Ts&... para) {
 		PrepareQuery(query);
 		(Bind(query, para), ...);
-		if (ExecuteQuery(query) == false) { throw std::runtime_error("sqlite error"); }
+		if (ExecuteQuery(query) == false) { throw std::runtime_error("no result row"); }
 		T result;
 		Read(query, result);
+		while (ExecuteQuery(query));
 		return result;
 	}
 	template<class T, class... Ts>
@@ -111,6 +121,34 @@ public:
 		std::vector<T> result;
 		while (ExecuteQuery(query)) { Read(query, result.emplace_back()); }
 		return result;
+	}
+
+public:
+	void Transaction(std::function<void()> queries) {
+		if (transaction_level == 0) {
+			if (ExecuteQuery(begin_transaction)) {
+				throw std::runtime_error("unexpected result row");
+			}
+		}
+		size_t prev_transaction_level = transaction_level;
+		try {
+			transaction_level++;
+			queries();
+			transaction_level = prev_transaction_level;
+			if (transaction_level == 0) {
+				if (ExecuteQuery(commit)) {
+					throw std::runtime_error("unexpected result row");
+				}
+			}
+		} catch (...) {
+			transaction_level = prev_transaction_level;
+			if (transaction_level == 0) {
+				if (ExecuteQuery(rollback)) {
+					throw std::runtime_error("unexpected result row");
+				}
+			}
+			throw;
+		}
 	}
 };
 

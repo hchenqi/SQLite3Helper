@@ -17,7 +17,7 @@ int index = 0;
 
 constexpr struct Result {
 	const Result& operator<<(int res) const {
-		if (res != SQLITE_OK) { throw std::runtime_error("sqlite error"); }
+		if (res != SQLITE_OK) { throw std::runtime_error("sqlite error: " + std::to_string(res)); }
 		return *this;
 	}
 }res;
@@ -32,12 +32,15 @@ inline sqlite3_stmt** AsSqliteStmt(void** stmt) { return reinterpret_cast<sqlite
 
 
 Query::~Query() {
-	res << sqlite3_finalize(AsSqliteStmt(command));
+	sqlite3_finalize(AsSqliteStmt(command));
 }
 
 
 Database::Database(const char file[]) : db(nullptr) {
 	res << sqlite3_open(file, AsSqliteDb(&db));
+	PrepareQuery(begin_transaction);
+	PrepareQuery(commit);
+	PrepareQuery(rollback);
 }
 
 Database::~Database() {
@@ -57,7 +60,11 @@ bool Database::ExecuteQuery(Query& query) {
 	index = 0;
 	if (ret == SQLITE_ROW) { return true; }
 	if (ret == SQLITE_DONE) { return false; }
-	throw std::runtime_error("sqlite error");
+	res << ret;
+}
+
+uint64 Database::Changes() {
+	return sqlite3_changes64(AsSqliteDb(db));
 }
 
 void Database::Bind(Query& query, uint64 object) {
