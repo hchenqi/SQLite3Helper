@@ -48,6 +48,7 @@ private:
 	bool ExecuteQuery(Query& query);
 public:
 	uint64 Changes();
+	const char* ErrorMessage();
 
 private:
 	void Bind(Query& query, uint64 object);

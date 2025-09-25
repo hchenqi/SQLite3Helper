@@ -6,12 +6,9 @@
 #pragma comment(lib, "winsqlite3.lib")
 
 
-
 namespace SQLite3Helper {
 
 namespace {
-
-constexpr size_t max_blob_length = 4096;  // 4kb
 
 int index = 0;
 
@@ -67,12 +64,15 @@ uint64 Database::Changes() {
 	return sqlite3_changes64(AsSqliteDb(db));
 }
 
+const char* Database::ErrorMessage() {
+	return sqlite3_errmsg(AsSqliteDb(db));
+}
+
 void Database::Bind(Query& query, uint64 object) {
 	res << sqlite3_bind_int64(AsSqliteStmt(query.command), index++, object);
 }
 
 void Database::Bind(Query& query, const void* data, size_t length) {
-	if (length > max_blob_length) { throw std::runtime_error("blob too large"); }
 	res << sqlite3_bind_blob(AsSqliteStmt(query.command), index++, data, (int)length, SQLITE_STATIC);
 }
 
