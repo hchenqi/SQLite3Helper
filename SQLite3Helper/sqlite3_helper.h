@@ -3,7 +3,6 @@
 #include <string>
 #include <vector>
 #include <tuple>
-#include <functional>
 #include <stdexcept>
 
 
@@ -125,7 +124,7 @@ public:
 	}
 
 public:
-	void Transaction(std::function<void()> queries) {
+	void Transaction(auto f) {
 		if (transaction_level == 0) {
 			if (ExecuteQuery(begin_transaction)) {
 				throw std::runtime_error("unexpected result row");
@@ -134,7 +133,7 @@ public:
 		size_t prev_transaction_level = transaction_level;
 		try {
 			transaction_level++;
-			queries();
+			f();
 			transaction_level = prev_transaction_level;
 			if (transaction_level == 0) {
 				if (ExecuteQuery(commit)) {
