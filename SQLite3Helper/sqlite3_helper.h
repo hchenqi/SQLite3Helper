@@ -40,6 +40,7 @@ private:
 	Query begin_transaction = "BEGIN TRANSACTION";
 	Query commit = "COMMIT";
 	Query rollback = "ROLLBACK";
+private:
 	size_t transaction_level = 0;
 
 private:
@@ -124,29 +125,45 @@ public:
 	}
 
 public:
-	void Transaction(auto f) {
+	void BeginTransaction() {
 		if (transaction_level == 0) {
 			if (ExecuteQuery(begin_transaction)) {
 				throw std::runtime_error("unexpected result row");
 			}
 		}
-		size_t prev_transaction_level = transaction_level;
+		transaction_level++;
+	}
+	void Commit() {
+		if (transaction_level == 0) {
+			throw std::invalid_argument("no active transaction");
+		}
+		if (transaction_level == 1) {
+			if (ExecuteQuery(commit)) {
+				throw std::runtime_error("unexpected result row");
+			}
+		}
+		transaction_level--;
+	}
+	void Rollback() {
+		if (transaction_level == 0) {
+			throw std::invalid_argument("no active transaction");
+		}
+		if (transaction_level == 1) {
+			if (ExecuteQuery(commit)) {
+				throw std::runtime_error("unexpected result row");
+			}
+		}
+		transaction_level--;
+	}
+
+public:
+	void Transaction(auto f) {
+		BeginTransaction();
 		try {
-			transaction_level++;
 			f();
-			transaction_level = prev_transaction_level;
-			if (transaction_level == 0) {
-				if (ExecuteQuery(commit)) {
-					throw std::runtime_error("unexpected result row");
-				}
-			}
+			Commit();
 		} catch (...) {
-			transaction_level = prev_transaction_level;
-			if (transaction_level == 0) {
-				if (ExecuteQuery(rollback)) {
-					throw std::runtime_error("unexpected result row");
-				}
-			}
+			Rollback();
 			throw;
 		}
 	}
