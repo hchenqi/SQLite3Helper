@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <memory>
 #include <vector>
 #include <tuple>
 #include <stdexcept>
@@ -25,6 +26,16 @@ private:
 };
 
 
+class TransactionHook {
+public:
+	virtual ~TransactionHook() {}
+	virtual void AfterBeginTransaction() {}
+	virtual void BeforeCommit() {}
+	virtual void AfterCommit() {}
+	virtual void AfterRollback() {}
+};
+
+
 class Database {
 private:
 	void* db;
@@ -42,6 +53,11 @@ private:
 	Query rollback = "ROLLBACK";
 private:
 	size_t transaction_level = 0;
+	std::unique_ptr<TransactionHook> transaction_hook;
+public:
+	void SetTransactionHook(std::unique_ptr<TransactionHook> transaction_hook) {
+		this->transaction_hook = std::move(transaction_hook);
+	}
 
 private:
 	void PrepareQuery(Query& query);
@@ -130,6 +146,9 @@ public:
 			if (ExecuteQuery(begin_transaction)) {
 				throw std::runtime_error("unexpected result row");
 			}
+			if (transaction_hook) {
+				transaction_hook->AfterBeginTransaction();
+			}
 		}
 		transaction_level++;
 	}
@@ -137,23 +156,32 @@ public:
 		if (transaction_level == 0) {
 			throw std::invalid_argument("no active transaction");
 		}
-		if (transaction_level == 1) {
+		transaction_level--;
+		if (transaction_level == 0) {
+			if (transaction_hook) {
+				transaction_hook->BeforeCommit();
+			}
 			if (ExecuteQuery(commit)) {
 				throw std::runtime_error("unexpected result row");
 			}
+			if (transaction_hook) {
+				transaction_hook->AfterCommit();
+			}
 		}
-		transaction_level--;
 	}
 	void Rollback() {
 		if (transaction_level == 0) {
 			throw std::invalid_argument("no active transaction");
 		}
-		if (transaction_level == 1) {
-			if (ExecuteQuery(commit)) {
+		transaction_level--;
+		if (transaction_level == 0) {
+			if (ExecuteQuery(rollback)) {
 				throw std::runtime_error("unexpected result row");
 			}
+			if (transaction_hook) {
+				transaction_hook->AfterRollback();
+			}
 		}
-		transaction_level--;
 	}
 
 public:
