@@ -1,9 +1,9 @@
 #pragma once
 
 #include <string>
-#include <memory>
 #include <vector>
 #include <tuple>
+#include <optional>
 #include <stdexcept>
 
 
@@ -53,10 +53,10 @@ private:
 	Query rollback = "ROLLBACK";
 private:
 	size_t transaction_level = 0;
-	std::unique_ptr<TransactionHook> transaction_hook;
+	TransactionHook* transaction_hook = nullptr;
 public:
-	void SetTransactionHook(std::unique_ptr<TransactionHook> transaction_hook) {
-		this->transaction_hook = std::move(transaction_hook);
+	void SetTransactionHook(TransactionHook& transaction_hook) {
+		this->transaction_hook = &transaction_hook;
 	}
 
 private:
@@ -132,6 +132,16 @@ public:
 		return result;
 	}
 	template<class T, class... Ts>
+	std::optional<T> ExecuteForOneOptional(Query& query, const Ts&... para) {
+		PrepareQuery(query);
+		(Bind(query, para), ...);
+		if (ExecuteQuery(query) == false) { return std::nullopt; }
+		T result;
+		Read(query, result);
+		while (ExecuteQuery(query));
+		return result;
+	}
+	template<class T, class... Ts>
 	std::vector<T> ExecuteForMultiple(Query& query, const Ts&... para) {
 		PrepareQuery(query);
 		(Bind(query, para), ...);
@@ -146,41 +156,47 @@ public:
 			if (ExecuteQuery(begin_transaction)) {
 				throw std::runtime_error("unexpected result row");
 			}
+			transaction_level++;
 			if (transaction_hook) {
 				transaction_hook->AfterBeginTransaction();
 			}
+		} else {
+			transaction_level++;
 		}
-		transaction_level++;
 	}
 	void Commit() {
 		if (transaction_level == 0) {
 			throw std::invalid_argument("no active transaction");
 		}
-		transaction_level--;
-		if (transaction_level == 0) {
+		if (transaction_level == 1) {
 			if (transaction_hook) {
 				transaction_hook->BeforeCommit();
 			}
 			if (ExecuteQuery(commit)) {
 				throw std::runtime_error("unexpected result row");
 			}
+			transaction_level--;
 			if (transaction_hook) {
 				transaction_hook->AfterCommit();
 			}
+		} else {
+			transaction_level--;
 		}
 	}
 	void Rollback() {
 		if (transaction_level == 0) {
 			throw std::invalid_argument("no active transaction");
 		}
-		transaction_level--;
-		if (transaction_level == 0) {
+		if (transaction_level == 1) {
 			if (ExecuteQuery(rollback)) {
 				throw std::runtime_error("unexpected result row");
 			}
+			transaction_level--;
 			if (transaction_hook) {
 				transaction_hook->AfterRollback();
 			}
+		} else {
+			transaction_level--;
 		}
 	}
 
