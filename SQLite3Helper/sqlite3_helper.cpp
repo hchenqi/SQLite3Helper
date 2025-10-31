@@ -58,6 +58,12 @@ bool Database::ExecuteQuery(Query& query) {
 	if (ret == SQLITE_ROW) { return true; }
 	if (ret == SQLITE_DONE) { return false; }
 	res << ret;
+	// std::unreachable(); // requires C++23
+#if defined(_MSC_VER) && !defined(__clang__) // MSVC
+    __assume(false);
+#else // GCC, Clang
+    __builtin_unreachable();
+#endif
 }
 
 uint64 Database::Changes() {
